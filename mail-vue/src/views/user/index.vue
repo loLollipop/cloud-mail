@@ -157,18 +157,11 @@
       <div class="container">
         <el-input v-model="addForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
           <template #append>
-            <el-select
+            <DomainSelect
                 v-model="addForm.suffix"
+                :domain-list="domainList"
                 :placeholder="$t('select')"
-                class="select"
-            >
-              <el-option
-                  v-for="item in domainList"
-                  :key="item"
-                  :label="item"
-                  :value="item"
-              />
-            </el-select>
+            />
           </template>
         </el-input>
         <el-input type="password" v-model="addForm.password" :placeholder="$t('password')"/>
@@ -380,6 +373,7 @@ import {isEmail} from "@/utils/verify-utils.js";
 import {useRoleStore} from "@/store/role.js";
 import {useUserStore} from "@/store/user.js";
 import {useI18n} from 'vue-i18n';
+import DomainSelect from "@/components/domain-select/index.vue";
 
 defineOptions({
   name: 'user'
@@ -1186,10 +1180,6 @@ function adjustWidth() {
   }
 }
 
-.select {
-  width: min(180px, 45vw);
-}
-
 .loading {
   position: absolute;
   display: flex;
@@ -1232,12 +1222,6 @@ function adjustWidth() {
   padding: 0 !important;
   padding-left: 8px !important;
   background: var(--el-bg-color);
-}
-
-:deep(.el-input-group__append .el-select__wrapper) {
-  background: transparent;
-  box-shadow: none;
-  padding: 0 4px;
 }
 
 :deep(.cell) {

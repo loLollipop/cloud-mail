@@ -17,19 +17,12 @@
           <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="form.email"
                     type="text" :placeholder="$t('emailAccount')" autocomplete="off">
             <template #append v-if="!hideLoginDomain">
-              <el-select
+              <DomainSelect
                   v-if="show === 'login'"
                   v-model="suffix"
+                  :domain-list="domainList"
                   :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
+              />
             </template>
           </el-input>
           <el-input v-model="form.password" :placeholder="$t('password')" type="password" autocomplete="off">
@@ -45,19 +38,12 @@
           <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="registerForm.email" type="text" :placeholder="$t('emailAccount')"
                     autocomplete="off">
             <template #append v-if="!hideLoginDomain">
-              <el-select
+              <DomainSelect
                   v-if="show !== 'login'"
                   v-model="suffix"
+                  :domain-list="domainList"
                   :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
+              />
             </template>
           </el-input>
           <el-input v-model="registerForm.password" :placeholder="$t('password')" type="password" autocomplete="off"/>
@@ -96,18 +82,11 @@
       <div class="bind-container">
         <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="bindForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
           <template #append v-if="!hideLoginDomain">
-            <el-select
+            <DomainSelect
                 v-model="suffix"
+                :domain-list="domainList"
                 :placeholder="$t('select')"
-                class="select"
-            >
-              <el-option
-                  v-for="item in domainList"
-                  :key="item"
-                  :label="item"
-                  :value="item"
-              />
-            </el-select>
+            />
           </template>
         </el-input>
         <el-input v-if="settingStore.settings.regKey === 0" v-model="bindForm.code" :placeholder="$t('regKey')"
@@ -138,6 +117,7 @@ import {useUserStore} from "@/store/user.js";
 import {useUiStore} from "@/store/ui.js";
 import {Icon} from "@iconify/vue";
 import {cvtR2Url} from "@/utils/convert.js";
+import DomainSelect from "@/components/domain-select/index.vue";
 import {loginUserInfo} from "@/request/my.js";
 import {permsToRouter} from "@/perm/perm.js";
 import {useI18n} from "vue-i18n";
@@ -705,16 +685,6 @@ function submitRegister() {
 
 .register-turnstile {
   margin-bottom: 18px;
-}
-
-.select {
-  width: min(180px, 45vw);
-}
-
-:deep(.el-input-group__append .el-select__wrapper) {
-  background: transparent;
-  box-shadow: none;
-  padding: 0 4px;
 }
 
 .custom-style {

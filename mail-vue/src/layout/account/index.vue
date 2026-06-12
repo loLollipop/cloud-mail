@@ -79,18 +79,11 @@
       <div class="container">
         <el-input v-model="addForm.email" ref="addRef" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
           <template #append>
-            <el-select
+            <DomainSelect
                 v-model="addForm.suffix"
+                :domain-list="domainList"
                 :placeholder="$t('select')"
-                class="select"
-            >
-              <el-option
-                  v-for="item in domainList"
-                  :key="item"
-                  :label="item"
-                  :value="item"
-              />
-            </el-select>
+            />
           </template>
         </el-input>
         <el-button class="btn" type="primary" @click="submit" :loading="addLoading"
@@ -138,6 +131,7 @@ import {useUserStore} from "@/store/user.js";
 import {hasPerm} from "@/perm/perm.js"
 import {useI18n} from "vue-i18n";
 import {AccountAllReceiveEnum} from "@/enums/account-enum.js";
+import DomainSelect from "@/components/domain-select/index.vue";
 
 const {t} = useI18n();
 const userStore = useUserStore();
@@ -627,16 +621,6 @@ path[fill="#ffdda1"] {
     margin-right: 20px !important;
     margin-left: 20px !important;
   }
-}
-
-.select {
-  width: min(180px, 45vw);
-}
-
-:deep(.el-input-group__append .el-select__wrapper) {
-  background: transparent;
-  box-shadow: none;
-  padding: 0 4px;
 }
 
 :deep(.el-pagination .el-select) {
