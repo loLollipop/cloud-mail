@@ -157,25 +157,18 @@
       <div class="container">
         <el-input v-model="addForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
           <template #append>
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  v-model="addForm.suffix"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
-              <div>
-                <span>{{ addForm.suffix }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
-              </div>
-            </div>
+            <el-select
+                v-model="addForm.suffix"
+                :placeholder="$t('select')"
+                class="select"
+            >
+              <el-option
+                  v-for="item in domainList"
+                  :key="item"
+                  :label="item"
+                  :value="item"
+              />
+            </el-select>
           </template>
         </el-input>
         <el-input type="password" v-model="addForm.password" :placeholder="$t('password')"/>
@@ -466,7 +459,6 @@ const pagerCount = ref(10)
 const settingLoading = ref(false)
 const tableLoading = ref(true)
 const roleList = reactive([])
-const mySelect = ref({})
 const accountList = reactive([])
 const accountParams = reactive({
   size: 10,
@@ -674,10 +666,6 @@ function setRightStatusName(user) {
 
 const tableRowFormatter = (data) => {
   return data.row.email
-}
-
-const openSelect = () => {
-  mySelect.value.toggleMenu()
 }
 
 function resetAddForm() {
@@ -1199,11 +1187,7 @@ function adjustWidth() {
 }
 
 .select {
-  position: absolute;
-  right: 30px;
-  width: 100px;
-  opacity: 0;
-  pointer-events: none;
+  width: min(180px, 45vw);
 }
 
 .loading {
@@ -1230,11 +1214,6 @@ function adjustWidth() {
   opacity: 0;
 }
 
-.setting-icon {
-  position: relative;
-  top: 6px;
-}
-
 .right-dropdown-item {
   display: flex;
   gap: 10px;
@@ -1253,6 +1232,12 @@ function adjustWidth() {
   padding: 0 !important;
   padding-left: 8px !important;
   background: var(--el-bg-color);
+}
+
+:deep(.el-input-group__append .el-select__wrapper) {
+  background: transparent;
+  box-shadow: none;
+  padding: 0 4px;
 }
 
 :deep(.cell) {

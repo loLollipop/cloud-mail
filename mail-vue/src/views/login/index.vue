@@ -17,26 +17,19 @@
           <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="form.email"
                     type="text" :placeholder="$t('emailAccount')" autocomplete="off">
             <template #append v-if="!hideLoginDomain">
-              <div @click.stop="openSelect">
-                <el-select
-                    v-if="show === 'login'"
-                    ref="mySelect"
-                    v-model="suffix"
-                    :placeholder="$t('select')"
-                    class="select"
-                >
-                  <el-option
-                      v-for="item in domainList"
-                      :key="item"
-                      :label="item"
-                      :value="item"
-                  />
-                </el-select>
-                <div style="color: var(--el-text-color-primary)">
-                  <span>{{ suffix }}</span>
-                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
-                </div>
-              </div>
+              <el-select
+                  v-if="show === 'login'"
+                  v-model="suffix"
+                  :placeholder="$t('select')"
+                  class="select"
+              >
+                <el-option
+                    v-for="item in domainList"
+                    :key="item"
+                    :label="item"
+                    :value="item"
+                />
+              </el-select>
             </template>
           </el-input>
           <el-input v-model="form.password" :placeholder="$t('password')" type="password" autocomplete="off">
@@ -52,26 +45,19 @@
           <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="registerForm.email" type="text" :placeholder="$t('emailAccount')"
                     autocomplete="off">
             <template #append v-if="!hideLoginDomain">
-              <div @click.stop="openSelect">
-                <el-select
-                    v-if="show !== 'login'"
-                    ref="mySelect"
-                    v-model="suffix"
-                    :placeholder="$t('select')"
-                    class="select"
-                >
-                  <el-option
-                      v-for="item in domainList"
-                      :key="item"
-                      :label="item"
-                      :value="item"
-                  />
-                </el-select>
-                <div>
-                  <span>{{ suffix }}</span>
-                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
-                </div>
-              </div>
+              <el-select
+                  v-if="show !== 'login'"
+                  v-model="suffix"
+                  :placeholder="$t('select')"
+                  class="select"
+              >
+                <el-option
+                    v-for="item in domainList"
+                    :key="item"
+                    :label="item"
+                    :value="item"
+                />
+              </el-select>
             </template>
           </el-input>
           <el-input v-model="registerForm.password" :placeholder="$t('password')" type="password" autocomplete="off"/>
@@ -110,25 +96,18 @@
       <div class="bind-container">
         <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="bindForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
           <template #append v-if="!hideLoginDomain">
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  v-model="suffix"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
-              <div>
-                <span>{{ suffix }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
-              </div>
-            </div>
+            <el-select
+                v-model="suffix"
+                :placeholder="$t('select')"
+                class="select"
+            >
+              <el-option
+                  v-for="item in domainList"
+                  :key="item"
+                  :label="item"
+                  :value="item"
+              />
+            </el-select>
           </template>
         </el-input>
         <el-input v-if="settingStore.settings.regKey === 0" v-model="bindForm.code" :placeholder="$t('regKey')"
@@ -186,7 +165,6 @@ const form = reactive({
   password: '',
 
 });
-const mySelect = ref()
 const suffix = ref('')
 const registerForm = reactive({
   email: '',
@@ -248,10 +226,6 @@ const background = computed(() => {
     'background-position': 'center'
   } : ''
 })
-
-const openSelect = () => {
-  mySelect.value.toggleMenu()
-}
 
 const getFullEmail = (email) => {
   return hideLoginDomain.value ? email : email + suffix.value
@@ -698,11 +672,6 @@ function submitRegister() {
   gap: 15px;
 }
 
-.setting-icon {
-  position: relative;
-  top: 6px;
-}
-
 .github {
   position: fixed;
   width: 35px;
@@ -737,11 +706,13 @@ function submitRegister() {
 }
 
 .select {
-  position: absolute;
-  right: 30px;
-  width: 100px;
-  opacity: 0;
-  pointer-events: none;
+  width: min(180px, 45vw);
+}
+
+:deep(.el-input-group__append .el-select__wrapper) {
+  background: transparent;
+  box-shadow: none;
+  padding: 0 4px;
 }
 
 .custom-style {
