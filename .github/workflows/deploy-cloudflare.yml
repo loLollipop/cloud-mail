@@ -1,4 +1,4 @@
-name: 🚀 Deploy cloud-mail to Cloudflare Workers
+name: 🚀 Deploy lollipop-mail to Cloudflare Workers
 
 on:
   push:
@@ -9,12 +9,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  Deploy-cloud-mail:
+  Deploy-lollipop-mail:
     name: 🏗️ Build and Deploy
     runs-on: ubuntu-latest
 
     env:
-      NAME: ${{ secrets.NAME || vars.NAME || 'cloud-mail' }}
+      NAME: ${{ secrets.NAME || vars.NAME || 'lollipop-mail' }}
       CUSTOM_DOMAIN: ${{ secrets.CUSTOM_DOMAIN || vars.CUSTOM_DOMAIN }}
       DOMAIN: ${{ secrets.DOMAIN || vars.DOMAIN }}
       ADMIN: ${{ secrets.ADMIN || vars.ADMIN }}
@@ -239,6 +239,11 @@ jobs:
           
           echo "worker_url=$WORKER_URL" >> $GITHUB_OUTPUT
           echo "✅ Setup completed."
+
+      - name: 🔐 配置运行时 Cloudflare API Token / Configure runtime Cloudflare API token
+        working-directory: ./mail-worker
+        run: |
+          printf '%s' "$CLOUDFLARE_API_TOKEN" | pnpm wrangler secret put CF_API_TOKEN -c wrangler-action.toml
 
       - name: ♻️ 初始化数据库 / Initialize database
         run: |

@@ -1,6 +1,7 @@
 name = "${NAME}"
 main = "src/index.js"
 compatibility_date = "2025-06-04"
+keep_vars = true
 
 [observability]
 enabled = true
@@ -43,6 +44,7 @@ domain = "${DOMAIN}"
 admin = "${ADMIN}"
 jwt_secret = "${JWT_SECRET}"
 project_link = "${PROJECT_LINK}"
+cf_worker_name = "${NAME}"
 
 linuxdo_client_id = "${LINUXDO_CLIENT_ID}"
 linuxdo_client_secret = "${LINUXDO_CLIENT_SECRET}"

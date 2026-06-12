@@ -177,6 +177,21 @@
                 </div>
               </div>
               <div class="setting-item">
+                <div>
+                  <span>{{ $t('mailDomainManage') }}</span>
+                  <el-tooltip effect="dark" :content="$t('mailDomainManageDesc')">
+                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
+                  </el-tooltip>
+                </div>
+                <div class="forward">
+                  <el-tag v-if="settingStore.domainList.length">{{ settingStore.domainList.length }}</el-tag>
+                  <el-button class="opt-button" style="margin-top: 0" @click="openDomainManage" size="small"
+                             type="primary">
+                    <Icon icon="fluent:settings-48-regular" width="16" height="16"/>
+                  </el-button>
+                </div>
+              </div>
+              <div class="setting-item">
                 <div><span>{{ setting.hasCfEmail ? $t('cloudflareEmailSending') : $t('resendToken') }}</span></div>
                 <div v-if="setting.hasCfEmail">
                   <span>{{ $t('enabled') }}</span>
@@ -466,6 +481,54 @@
           <el-input type="text" :placeholder="$t('domainDesc')" v-model="r2DomainInput"/>
           <el-button type="primary" :loading="settingLoading" @click="saveR2domain">{{ $t('save') }}</el-button>
         </form>
+      </el-dialog>
+      <el-dialog class="domain-manage-dialog" v-model="domainManageShow" :title="$t('mailDomainManage')" width="520" @closed="resetDomainManage">
+        <div class="domain-manage-body">
+          <el-alert
+              :title="$t('mailDomainManageDesc')"
+              type="info"
+              :closable="false"
+              show-icon
+          />
+          <div class="domain-add-row">
+            <el-input
+                v-model="domainInput"
+                :placeholder="$t('domainDesc')"
+                @keyup.enter="addDomainTag(domainInput)"
+            />
+            <el-button type="primary" @click="addDomainTag(domainInput)">{{ $t('add') }}</el-button>
+          </div>
+          <div class="domain-tags">
+            <div
+                v-for="domain in editableDomains"
+                :key="domain"
+                class="domain-row"
+            >
+              <el-tag
+                  closable
+                  type="success"
+                  @close="removeDomainTag(domain)"
+              >
+                @{{ domain }}
+              </el-tag>
+              <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  :loading="cloudflareSyncLoading === domain"
+                  @click="syncDomain(domain)"
+              >
+                {{ $t('syncCloudflare') }}
+              </el-button>
+            </div>
+          </div>
+        </div>
+        <template #footer>
+          <div class="dialog-footer">
+            <el-button @click="domainManageShow = false">{{ $t('cancel') }}</el-button>
+            <el-button :loading="settingLoading" type="primary" @click="saveDomains">{{ $t('save') }}</el-button>
+          </div>
+        </template>
       </el-dialog>
       <el-dialog v-model="turnstileShow" :title="$t('addTurnstileSecret')" width="340"
                  @closed="turnstileForm.secretKey = '';turnstileForm.siteKey = ''">
@@ -805,7 +868,7 @@
 
 <script setup>
 import {computed, defineOptions, nextTick, reactive, ref} from "vue";
-import {deleteBackground, setBackground, setBlackList, settingQuery, settingSet} from "@/request/setting.js";
+import {deleteBackground, setBackground, setBlackList, setDomains, settingQuery, settingSet, syncCloudflareDomain} from "@/request/setting.js";
 import {useSettingStore} from "@/store/setting.js";
 import {useUiStore} from "@/store/ui.js";
 import {useUserStore} from "@/store/user.js";
@@ -840,6 +903,7 @@ const resendTokenFormShow = ref(false)
 const blackFormShow = ref(false)
 const aiCodeFilterShow = ref(false)
 const r2DomainShow = ref(false)
+const domainManageShow = ref(false)
 const turnstileShow = ref(false)
 const tgSettingShow = ref(false)
 const noticePopupShow = ref(false)
@@ -854,6 +918,9 @@ const editTitle = ref('')
 const settingLoading = ref(false)
 const clearS3Loading = ref(false)
 const r2DomainInput = ref('')
+const domainInput = ref('')
+const editableDomains = ref([])
+const cloudflareSyncLoading = ref('')
 const loginOpacity = ref(0)
 const minEmailPrefix = ref(0)
 const emailPrefixFilter = ref([])
@@ -951,6 +1018,7 @@ function getSettings() {
     backgroundUrl.value = setting.value.background?.startsWith('http') ? setting.value.background : ''
     editTitle.value = setting.value.title
     r2DomainInput.value = setting.value.r2Domain
+    resetDomainManage()
     addVerifyCount.value = setting.value.addVerifyCount
     regVerifyCount.value = setting.value.regVerifyCount
     resetNoticeForm()
@@ -967,6 +1035,89 @@ function getSettings() {
 
 function openNoticePopup() {
   uiStore.showNotice()
+}
+
+function normalizeDomain(domain) {
+  return `${domain || ''}`
+      .trim()
+      .toLowerCase()
+      .replace(/^@/, '')
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+}
+
+function resetDomainManage() {
+  editableDomains.value = (settingStore.domainList || [])
+      .map(domain => normalizeDomain(domain))
+      .filter(Boolean)
+  domainInput.value = ''
+}
+
+function openDomainManage() {
+  resetDomainManage()
+  domainManageShow.value = true
+}
+
+function addDomainTag(domain) {
+  const value = normalizeDomain(domain)
+  if (!value) return
+  if (!isDomain(value)) {
+    ElMessage({
+      message: t('invalidDomainMsg'),
+      type: "error",
+      plain: true
+    })
+    return
+  }
+  if (!editableDomains.value.includes(value)) {
+    editableDomains.value.push(value)
+  }
+  domainInput.value = ''
+}
+
+function removeDomainTag(domain) {
+  editableDomains.value = editableDomains.value.filter(item => item !== domain)
+}
+
+function saveDomains() {
+  if (editableDomains.value.length === 0) {
+    ElMessage({
+      message: t('emptyDomainListMsg'),
+      type: "error",
+      plain: true
+    })
+    return
+  }
+
+  settingLoading.value = true
+  setDomains(editableDomains.value).then((settingData) => {
+    setting.value = settingData
+    settingStore.domainList = settingData.domainList
+    resendTokenForm.domain = setting.value.domainList[0]
+    domainManageShow.value = false
+    ElMessage({
+      message: t('saveSuccessMsg'),
+      type: "success",
+      plain: true
+    })
+    getSettings()
+  }).finally(() => {
+    settingLoading.value = false
+  })
+}
+
+function syncDomain(domain) {
+  cloudflareSyncLoading.value = domain
+  syncCloudflareDomain(domain).then(() => {
+    ElMessage({
+      message: t('cloudflareSyncSuccessMsg'),
+      type: "success",
+      plain: true
+    })
+    getSettings()
+  }).finally(() => {
+    cloudflareSyncLoading.value = ''
+  })
 }
 
 function openAddVerifyCount() {
@@ -1493,6 +1644,7 @@ function editSetting(settingForm, refreshStatus = true) {
     addS3Show.value = false
     emailPrefixShow.value = false
     aiCodeFilterShow.value = false
+    domainManageShow.value = false
   }).catch((e) => {
     loginOpacity.value = setting.value.loginOpacity
     setting.value = {...setting.value, ...JSON.parse(backup)}
@@ -1673,6 +1825,31 @@ function editSetting(settingForm, refreshStatus = true) {
   justify-content: space-between;
 }
 
+.domain-manage-body {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.domain-add-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.domain-tags {
+  display: grid;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.domain-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .notice-popup-item {
   margin-top: 15px;
 }
@@ -1713,6 +1890,15 @@ function editSetting(settingForm, refreshStatus = true) {
   min-height: 300px;
   width: 500px !important;
   @media (max-width: 540px) {
+    width: calc(100% - 40px) !important;
+    margin-right: 20px !important;
+    margin-left: 20px !important;
+  }
+}
+
+:deep(.domain-manage-dialog.el-dialog) {
+  width: 520px !important;
+  @media (max-width: 560px) {
     width: calc(100% - 40px) !important;
     margin-right: 20px !important;
     margin-left: 20px !important;

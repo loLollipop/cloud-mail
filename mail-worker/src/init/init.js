@@ -29,8 +29,27 @@ const dbInit = {
 		await this.v2_8DB(c);
 		await this.v2_9DB(c);
 		await this.v3_0DB(c);
+		await this.v3_1DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_1DB(c) {
+		try {
+			await c.env.db.prepare(`ALTER TABLE setting ADD COLUMN domain_list TEXT NOT NULL DEFAULT '';`).run();
+		} catch (e) {
+			console.warn(`跳过字段：${e.message}`);
+		}
+
+		try {
+			const settingRow = await c.env.db.prepare(`SELECT domain_list FROM setting LIMIT 1`).first();
+			const domainList = settingService.parseEnvDomain(c.env.domain);
+			if ((!settingRow?.domain_list) && domainList.length > 0) {
+				await c.env.db.prepare(`UPDATE setting SET domain_list = ?`).bind(domainList.join(',')).run();
+			}
+		} catch (e) {
+			console.warn(`跳过域名初始化：${e.message}`);
+		}
 	},
 
 	async v3_0DB(c) {

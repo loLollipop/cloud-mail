@@ -33,3 +33,23 @@ app.put('/setting/setBlacklist', async (c) => {
 	return c.json(result.ok(setting));
 })
 
+app.put('/setting/domains', async (c) => {
+	const setting = await settingService.setDomains(c, await c.req.json());
+	return c.json(result.ok(setting));
+})
+
+app.post('/setting/domains', async (c) => {
+	const setting = await settingService.addDomain(c, await c.req.json());
+	return c.json(result.ok(setting));
+})
+
+app.delete('/setting/domains/:domain', async (c) => {
+	const setting = await settingService.deleteDomain(c, { domain: c.req.param('domain') });
+	return c.json(result.ok(setting));
+})
+
+app.post('/setting/domains/sync-cloudflare', async (c) => {
+	const data = await settingService.syncCloudflareDomain(c, await c.req.json());
+	return c.json(result.ok(data));
+})
+

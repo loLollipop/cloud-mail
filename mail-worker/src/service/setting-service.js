@@ -9,12 +9,21 @@ import BizError from '../error/biz-error';
 import {t} from '../i18n/i18n'
 import verifyRecordService from './verify-record-service';
 import userContext from '../security/user-context';
+import verifyUtils from '../utils/verify-utils';
 
 const settingService = {
 
 	async refresh(c) {
-		const settingRow = await orm(c).select().from(setting).get();
+		let settingRow;
+		try {
+			settingRow = await orm(c).select().from(setting).get();
+		} catch (e) {
+			if (!e.message?.includes('domain_list')) throw e;
+			await this.ensureDomainColumn(c);
+			settingRow = await orm(c).select().from(setting).get();
+		}
 		settingRow.resendTokens = JSON.parse(settingRow.resendTokens);
+		settingRow.domainList = this.resolveDomainList(c, settingRow);
 		c.set('setting', settingRow);
 		await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingRow));
 	},
@@ -31,21 +40,11 @@ const settingService = {
 			throw new BizError('数据库未初始化 Database not initialized.');
 		}
 
-		let domainList = c.env.domain;
-
-		if (typeof domainList === 'string') {
-			try {
-				domainList = JSON.parse(domainList)
-			} catch (error) {
-				throw new BizError(t('notJsonDomain'));
-			}
-		}
-
-		if (!c.env.domain) {
+		const domainList = this.resolveDomainList(c, setting);
+		if (domainList.length === 0) {
 			throw new BizError(t('noDomainVariable'));
 		}
 
-		domainList = domainList.map(item => '@' + item);
 		setting.domainList = domainList;
 
 
@@ -139,9 +138,230 @@ const settingService = {
 			params.aiCodeFilter = params.aiCodeFilter + '';
 		}
 
+		delete params.domainList;
+		delete params.hasR2;
+		delete params.hasCfEmail;
+		delete params.storageType;
+
 		params.resendTokens = JSON.stringify(resendTokens);
 		await orm(c).update(setting).set({ ...params }).returning().get();
 		await this.refresh(c);
+	},
+
+	async setDomains(c, params) {
+		await this.ensureDomainColumn(c);
+		const domainList = this.normalizeDomainList(params.domainList);
+		if (domainList.length === 0) {
+			throw new BizError(t('noDomainVariable'));
+		}
+
+		await orm(c).update(setting).set({ domainList: domainList.join(',') }).run();
+		await this.refresh(c);
+		return this.get(c);
+	},
+
+	async addDomain(c, params) {
+		const settingData = await this.query(c);
+		const domain = this.normalizeDomain(params.domain);
+		const domainList = [...settingData.domainList.map(item => item.replace(/^@/, '')), domain];
+		return this.setDomains(c, { domainList });
+	},
+
+	async deleteDomain(c, params) {
+		const domain = this.normalizeDomain(params.domain);
+		const settingData = await this.query(c);
+		const domainList = settingData.domainList
+			.map(item => item.replace(/^@/, ''))
+			.filter(item => item !== domain);
+		return this.setDomains(c, { domainList });
+	},
+
+	async syncCloudflareDomain(c, params) {
+		const domain = this.normalizeDomain(params.domain);
+		if (!this.getCloudflareApiToken(c)) {
+			throw new BizError('CF_API_TOKEN is not configured');
+		}
+
+		const zoneId = await this.resolveCloudflareZoneId(c, domain);
+		const workerName = this.getCloudflareWorkerName(c, params.workerName);
+
+		const dnsResult = await this.cloudflareRequest(c, `/zones/${zoneId}/email/routing/dns`, {
+			method: 'POST',
+			body: JSON.stringify({ name: domain })
+		});
+
+		const catchAllResult = await this.cloudflareRequest(c, `/zones/${zoneId}/email/routing/rules/catch_all`, {
+			method: 'PUT',
+			body: JSON.stringify({
+				actions: [
+					{
+						type: 'worker',
+						value: [workerName]
+					}
+				],
+				matchers: [
+					{
+						type: 'all'
+					}
+				],
+				enabled: true,
+				name: `Cloud Mail catch-all to ${workerName}`
+			})
+		});
+
+		const settingData = await this.query(c);
+		if (!settingData.domainList.includes('@' + domain)) {
+			await this.setDomains(c, { domainList: [...settingData.domainList, domain] });
+		}
+
+		return {
+			domain,
+			zoneId,
+			workerName,
+			dns: dnsResult.result,
+			catchAll: catchAllResult.result
+		};
+	},
+
+	async resolveCloudflareZoneId(c, domain) {
+		const cfZoneIds = c.env.cf_zone_ids || c.env.CF_ZONE_IDS;
+		if (cfZoneIds) {
+			try {
+				const zoneIds = JSON.parse(cfZoneIds);
+				if (zoneIds[domain]) {
+					return zoneIds[domain];
+				}
+			} catch (e) {
+				throw new BizError('CF_ZONE_IDS must be a JSON object');
+			}
+		}
+
+		const data = await this.cloudflareRequest(c, `/zones?name=${encodeURIComponent(domain)}&status=active`, {
+			method: 'GET'
+		});
+		const zone = data?.result?.[0];
+		if (!zone?.id) {
+			throw new BizError(`Cloudflare zone not found: ${domain}`);
+		}
+		return zone.id;
+	},
+
+	async cloudflareRequest(c, path, init = {}) {
+		const resp = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
+			...init,
+			headers: {
+				Authorization: `Bearer ${this.getCloudflareApiToken(c)}`,
+				'Content-Type': 'application/json',
+				...(init.headers || {})
+			}
+		});
+		const data = await resp.json();
+		if (!resp.ok || data.success === false) {
+			const message = data.errors?.map(item => item.message).join('; ') || `Cloudflare API failed: ${resp.status}`;
+			throw new BizError(message);
+		}
+		return data;
+	},
+
+	getCloudflareApiToken(c) {
+		return c.env.cf_api_token || c.env.CF_API_TOKEN;
+	},
+
+	getCloudflareWorkerName(c, workerName) {
+		return workerName || c.env.cf_worker_name || c.env.CF_WORKER_NAME || 'lollipop-mail';
+	},
+
+	async ensureDomainColumn(c) {
+		try {
+			await c.env.db.prepare(`ALTER TABLE setting ADD COLUMN domain_list TEXT NOT NULL DEFAULT '';`).run();
+		} catch (e) {
+			if (!e.message?.includes('duplicate column')) {
+				console.warn(`跳过域名字段：${e.message}`);
+			}
+		}
+	},
+
+	resolveDomainList(c, settingRow = {}) {
+		const savedList = this.normalizeDomainList(settingRow.domainList, false);
+		if (savedList.length > 0) {
+			return savedList.map(item => '@' + item);
+		}
+
+		const envList = this.parseEnvDomain(c.env.domain);
+		return envList.map(item => '@' + item);
+	},
+
+	parseEnvDomain(domain) {
+		if (!domain) {
+			return [];
+		}
+
+		if (Array.isArray(domain)) {
+			return this.normalizeDomainList(domain, false);
+		}
+
+		if (typeof domain === 'string') {
+			const value = domain.trim();
+			if (!value) return [];
+
+			if (value.startsWith('[')) {
+				try {
+					return this.normalizeDomainList(JSON.parse(value), false);
+				} catch (error) {
+					throw new BizError(t('notJsonDomain'));
+				}
+			}
+
+			return this.normalizeDomainList(value, false);
+		}
+
+		return [];
+	},
+
+	normalizeDomainList(domainList, throwOnInvalid = true) {
+		if (!domainList) {
+			return [];
+		}
+
+		const list = Array.isArray(domainList)
+			? domainList
+			: `${domainList}`.split(/[,，\s]+/);
+
+		const normalizedList = [];
+		for (const item of list) {
+			if (!item) continue;
+			const domain = this.normalizeDomain(item, throwOnInvalid);
+			if (domain && !normalizedList.includes(domain)) {
+				normalizedList.push(domain);
+			}
+		}
+		return normalizedList;
+	},
+
+	normalizeDomain(domain, throwOnInvalid = true) {
+		const value = `${domain || ''}`
+			.trim()
+			.toLowerCase()
+			.replace(/^@/, '')
+			.replace(/^https?:\/\//, '')
+			.replace(/\/.*$/, '');
+
+		if (!value) {
+			if (throwOnInvalid) throw new BizError(t('notEmailDomain'));
+			return '';
+		}
+
+		if (!verifyUtils.isDomain(value)) {
+			if (throwOnInvalid) throw new BizError(t('notEmailDomain'));
+			return '';
+		}
+
+		return value;
+	},
+
+	hasDomain(c, domain) {
+		const domainList = this.resolveDomainList(c, c.get?.('setting') || {});
+		return domainList.includes('@' + this.normalizeDomain(domain, false));
 	},
 
 	async deleteBackground(c) {

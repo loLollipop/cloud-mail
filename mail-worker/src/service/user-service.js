@@ -18,6 +18,7 @@ import { t } from '../i18n/i18n'
 import reqUtils from '../utils/req-utils';
 import {oauth} from "../entity/oauth";
 import oauthService from "./oauth-service";
+import settingService from './setting-service';
 
 const userService = {
 
@@ -305,8 +306,9 @@ const userService = {
 	async add(c, params) {
 
 		const { email, type, password } = params;
+		const { domainList } = await settingService.query(c);
 
-		if (!c.env.domain.includes(emailUtils.getDomain(email))) {
+		if (!domainList.includes('@' + emailUtils.getDomain(email))) {
 			throw new BizError(t('notEmailDomain'));
 		}
 

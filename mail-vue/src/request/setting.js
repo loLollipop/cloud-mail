@@ -23,3 +23,19 @@ export function deleteBackground() {
 export function setBlackList(params) {
     return http.put('/setting/setBlacklist', params)
 }
+
+export function setDomains(domainList) {
+    return http.put('/setting/domains', { domainList })
+}
+
+export function addDomain(domain) {
+    return http.post('/setting/domains', { domain })
+}
+
+export function deleteDomain(domain) {
+    return http.delete(`/setting/domains/${encodeURIComponent(domain)}`)
+}
+
+export function syncCloudflareDomain(domain) {
+    return http.post('/setting/domains/sync-cloudflare', { domain })
+}
