@@ -142,6 +142,7 @@ const zh = {
     customization: '个性化设置',
     websiteTitle: '网站标题',
     loginBoxOpacity: '登录透明',
+    loginBackgroundSize: '背景缩放',
     loginBackground: '登录背景',
     emailSetting: '邮件设置',
     receiveEmail: '邮件接收',

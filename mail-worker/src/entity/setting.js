@@ -24,6 +24,7 @@ export const setting = sqliteTable('setting', {
 	ruleEmail: text('rule_email').default('').notNull(),
 	ruleType: integer('rule_type').default(0).notNull(),
 	loginOpacity: integer('login_opacity').default(0.88),
+	loginBackgroundSize: integer('login_background_size').default(100).notNull(),
 	resendTokens: text('resend_tokens').default("{}").notNull(),
 	noticeTitle: text('notice_title').default('').notNull(),
 	noticeContent: text('notice_content').default('').notNull(),

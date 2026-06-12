@@ -94,6 +94,13 @@
                                    :step="0.01" :max="1" :min="0"/>
                 </div>
               </div>
+              <div class="setting-item">
+                <div class="title-item"><span>{{ $t('loginBackgroundSize') }}</span></div>
+                <div>
+                  <el-input-number size="small" v-model="loginBackgroundSize" @change="backgroundSizeChange"
+                                   :step="5" :max="100" :min="30"/>
+                </div>
+              </div>
               <div class="setting-item personalized">
                 <div><span>{{ $t('loginBackground') }}</span></div>
                 <div>
@@ -919,6 +926,7 @@ const domainInput = ref('')
 const editableDomains = ref([])
 const cloudflareSyncLoading = ref(false)
 const loginOpacity = ref(0)
+const loginBackgroundSize = ref(100)
 const minEmailPrefix = ref(0)
 const emailPrefixFilter = ref([])
 const backgroundUrl = ref('')
@@ -1010,6 +1018,7 @@ function getSettings() {
     settingStore.domainList = settingData.enabledDomainList || settingData.domainList;
     resendTokenForm.domain = (setting.value.domainList || [])[0]
     loginOpacity.value = setting.value.loginOpacity
+    loginBackgroundSize.value = setting.value.loginBackgroundSize || 100
     minEmailPrefix.value = setting.value.minEmailPrefix
     firstLoading.value = false
     backgroundUrl.value = setting.value.background?.startsWith('http') ? setting.value.background : ''
@@ -1404,6 +1413,13 @@ function doOpacityChange() {
   editSetting(form, true)
 }
 
+function doBackgroundSizeChange() {
+  if (!settingReady.value) return
+  const form = {}
+  form.loginBackgroundSize = loginBackgroundSize.value
+  editSetting(form, true)
+}
+
 function resetEmailPrefix() {
   minEmailPrefix.value = setting.value.minEmailPrefix
   emailPrefixFilter.value = setting.value.emailPrefixFilter
@@ -1431,6 +1447,11 @@ function saveAiCodeFilter() {
 }
 
 const opacityChange = debounce(doOpacityChange, 1000, {
+  leading: false,
+  trailing: true
+})
+
+const backgroundSizeChange = debounce(doBackgroundSizeChange, 1000, {
   leading: false,
   trailing: true
 })

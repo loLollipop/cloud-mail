@@ -140,6 +140,10 @@ const settingService = {
 			params.aiCodeFilter = params.aiCodeFilter + '';
 		}
 
+		if (Object.prototype.hasOwnProperty.call(params, 'loginBackgroundSize')) {
+			params.loginBackgroundSize = Math.min(100, Math.max(30, Number(params.loginBackgroundSize) || 100));
+		}
+
 		delete params.domainList;
 		delete params.disabledDomainList;
 		delete params.enabledDomainList;
@@ -295,6 +299,13 @@ const settingService = {
 		} catch (e) {
 			if (!e.message?.includes('duplicate column')) {
 				console.warn(`Skip disabled domain column: ${e.message}`);
+			}
+		}
+		try {
+			await c.env.db.prepare(`ALTER TABLE setting ADD COLUMN login_background_size INTEGER NOT NULL DEFAULT 100;`).run();
+		} catch (e) {
+			if (!e.message?.includes('duplicate column')) {
+				console.warn(`Skip login background size column: ${e.message}`);
 			}
 		}
 	},
@@ -479,6 +490,7 @@ const settingService = {
 			siteKey: settingRow.siteKey,
 			background: settingRow.background,
 			loginOpacity: settingRow.loginOpacity,
+			loginBackgroundSize: settingRow.loginBackgroundSize || 100,
 			domainList: settingRow.loginDomain === 1 && !token ? [] : settingRow.enabledDomainList,
 			regKey: settingRow.regKey,
 			regVerifyOpen: settingRow.regVerifyOpen,

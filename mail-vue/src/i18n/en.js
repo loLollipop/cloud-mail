@@ -142,6 +142,7 @@ const en = {
     customization: 'Customization',
     websiteTitle: 'Title',
     loginBoxOpacity: 'Login Box Opacity',
+    loginBackgroundSize: 'Background Scale',
     loginBackground: 'Background',
     emailSetting: 'Email',
     receiveEmail: 'Receive Email',

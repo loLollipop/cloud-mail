@@ -219,10 +219,12 @@ const hideLoginDomain = computed(() => settingStore.settings.loginDomain === 1)
 
 const background = computed(() => {
 
+  const backgroundSize = Number(settingStore.settings.loginBackgroundSize) || 100;
+
   return settingStore.settings.background ? {
     'background-image': `url(${cvtR2Url(settingStore.settings.background)})`,
     'background-repeat': 'no-repeat',
-    'background-size': 'cover',
+    'background-size': backgroundSize >= 100 ? 'cover' : `${backgroundSize}% auto`,
     'background-position': 'center'
   } : ''
 })

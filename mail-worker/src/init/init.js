@@ -48,6 +48,12 @@ const dbInit = {
 		}
 
 		try {
+			await c.env.db.prepare(`ALTER TABLE setting ADD COLUMN login_background_size INTEGER NOT NULL DEFAULT 100;`).run();
+		} catch (e) {
+			console.warn(`跳过字段：${e.message}`);
+		}
+
+		try {
 			const settingRow = await c.env.db.prepare(`SELECT domain_list FROM setting LIMIT 1`).first();
 			const domainList = settingService.parseEnvDomain(c.env.domain);
 			if ((!settingRow?.domain_list) && domainList.length > 0) {
@@ -415,6 +421,7 @@ const dbInit = {
 			`ALTER TABLE setting ADD COLUMN secret_key TEXT;`,
 			`ALTER TABLE setting ADD COLUMN background TEXT;`,
 			`ALTER TABLE setting ADD COLUMN login_opacity INTEGER NOT NULL DEFAULT 0.90;`,
+			`ALTER TABLE setting ADD COLUMN login_background_size INTEGER NOT NULL DEFAULT 100;`,
 
 			`ALTER TABLE user ADD COLUMN create_ip TEXT;`,
 			`ALTER TABLE user ADD COLUMN active_ip TEXT;`,
