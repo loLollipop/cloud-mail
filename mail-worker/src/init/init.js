@@ -42,6 +42,12 @@ const dbInit = {
 		}
 
 		try {
+			await c.env.db.prepare(`ALTER TABLE setting ADD COLUMN disabled_domain_list TEXT NOT NULL DEFAULT '';`).run();
+		} catch (e) {
+			console.warn(`跳过字段：${e.message}`);
+		}
+
+		try {
 			const settingRow = await c.env.db.prepare(`SELECT domain_list FROM setting LIMIT 1`).first();
 			const domainList = settingService.parseEnvDomain(c.env.domain);
 			if ((!settingRow?.domain_list) && domainList.length > 0) {

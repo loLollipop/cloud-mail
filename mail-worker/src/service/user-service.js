@@ -306,9 +306,9 @@ const userService = {
 	async add(c, params) {
 
 		const { email, type, password } = params;
-		const { domainList } = await settingService.query(c);
+		const { enabledDomainList } = await settingService.query(c);
 
-		if (!domainList.includes('@' + emailUtils.getDomain(email))) {
+		if (!enabledDomainList.includes('@' + emailUtils.getDomain(email))) {
 			throw new BizError(t('notEmailDomain'));
 		}
 

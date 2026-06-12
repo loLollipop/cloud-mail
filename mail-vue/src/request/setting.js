@@ -24,8 +24,8 @@ export function setBlackList(params) {
     return http.put('/setting/setBlacklist', params)
 }
 
-export function setDomains(domainList) {
-    return http.put('/setting/domains', { domainList })
+export function setDomains(domainList, disabledDomainList = []) {
+    return http.put('/setting/domains', { domainList, disabledDomainList })
 }
 
 export function addDomain(domain) {
@@ -36,6 +36,6 @@ export function deleteDomain(domain) {
     return http.delete(`/setting/domains/${encodeURIComponent(domain)}`)
 }
 
-export function syncCloudflareDomain(domainList) {
-    return http.post('/setting/domains/sync-cloudflare', { domainList })
+export function syncCloudflareDomain(domainList, disabledDomainList = []) {
+    return http.post('/setting/domains/sync-cloudflare', { domainList, disabledDomainList })
 }

@@ -17,7 +17,7 @@ const accountService = {
 
 	async add(c, params, userId) {
 
-		const { addEmailVerify , addEmail, manyEmail, addVerifyCount, minEmailPrefix, emailPrefixFilter, domainList } = await settingService.query(c);
+		const { addEmailVerify , addEmail, manyEmail, addVerifyCount, minEmailPrefix, emailPrefixFilter, enabledDomainList } = await settingService.query(c);
 
 		let { email, token } = params;
 
@@ -35,7 +35,7 @@ const accountService = {
 			throw new BizError(t('notEmail'));
 		}
 
-		if (!domainList.includes('@' + emailUtils.getDomain(email))) {
+		if (!enabledDomainList.includes('@' + emailUtils.getDomain(email))) {
 			throw new BizError(t('notExistDomain'));
 		}
 

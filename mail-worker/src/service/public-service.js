@@ -97,7 +97,7 @@ const publicService = {
 
 	async addUser(c, params) {
 		const { list } = params;
-		const { domainList } = await settingService.query(c);
+		const { enabledDomainList } = await settingService.query(c);
 
 		if (list.length === 0) return;
 
@@ -106,7 +106,7 @@ const publicService = {
 				throw new BizError(t('notEmail'));
 			}
 
-			if (!domainList.includes('@' + emailUtils.getDomain(emailRow.email))) {
+			if (!enabledDomainList.includes('@' + emailUtils.getDomain(emailRow.email))) {
 				throw new BizError(t('notEmailDomain'));
 			}
 

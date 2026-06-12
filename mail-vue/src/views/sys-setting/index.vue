@@ -184,7 +184,7 @@
                   </el-tooltip>
                 </div>
                 <div class="forward">
-                  <el-tag v-if="settingStore.domainList.length">{{ settingStore.domainList.length }}</el-tag>
+                  <el-tag v-if="setting.domainList?.length">{{ setting.domainList.length }}</el-tag>
                   <el-button class="opt-button" style="margin-top: 0" @click="openDomainManage" size="small"
                              type="primary">
                     <Icon icon="fluent:settings-48-regular" width="16" height="16"/>
@@ -465,7 +465,7 @@
         <form>
           <el-select style="margin-bottom: 15px" v-model="resendTokenForm.domain" placeholder="Select">
             <el-option
-                v-for="item in settingStore.domainList"
+                v-for="item in setting.domainList || []"
                 :key="item"
                 :label="item"
                 :value="item"
@@ -500,16 +500,22 @@
           </div>
           <div class="domain-tags">
             <div
-                v-for="domain in editableDomains"
-                :key="domain"
+                v-for="item in editableDomains"
+                :key="item.domain"
+                class="domain-row"
             >
               <el-tag
                   closable
-                  type="success"
-                  @close="removeDomainTag(domain)"
+                  :type="item.enabled ? 'success' : 'info'"
+                  @close="removeDomainTag(item.domain)"
               >
-                @{{ domain }}
+                @{{ item.domain }}
               </el-tag>
+              <el-switch
+                  v-model="item.enabled"
+                  :active-text="$t('domainEnabled')"
+                  :inactive-text="$t('domainDisabled')"
+              />
             </div>
           </div>
         </div>
@@ -1001,8 +1007,8 @@ function getSettings() {
   settingReady.value = false
   settingQuery().then(settingData => {
     setting.value = settingData
-    settingStore.domainList = settingData.domainList;
-    resendTokenForm.domain = setting.value.domainList[0]
+    settingStore.domainList = settingData.enabledDomainList || settingData.domainList;
+    resendTokenForm.domain = (setting.value.domainList || [])[0]
     loginOpacity.value = setting.value.loginOpacity
     minEmailPrefix.value = setting.value.minEmailPrefix
     firstLoading.value = false
@@ -1038,8 +1044,12 @@ function normalizeDomain(domain) {
 }
 
 function resetDomainManage() {
-  editableDomains.value = (settingStore.domainList || [])
-      .map(domain => normalizeDomain(domain))
+  const disabledSet = new Set((setting.value.disabledDomainList || []).map(domain => normalizeDomain(domain)))
+  editableDomains.value = (setting.value.domainList || [])
+      .map(domain => {
+        const value = normalizeDomain(domain)
+        return value ? { domain: value, enabled: !disabledSet.has(value) } : null
+      })
       .filter(Boolean)
   domainInput.value = ''
 }
@@ -1060,18 +1070,27 @@ function addDomainTag(domain) {
     })
     return
   }
-  if (!editableDomains.value.includes(value)) {
-    editableDomains.value.push(value)
+  if (!editableDomains.value.some(item => item.domain === value)) {
+    editableDomains.value.push({domain: value, enabled: true})
   }
   domainInput.value = ''
 }
 
 function removeDomainTag(domain) {
-  editableDomains.value = editableDomains.value.filter(item => item !== domain)
+  editableDomains.value = editableDomains.value.filter(item => item.domain !== domain)
+}
+
+function domainPayload() {
+  const domainList = editableDomains.value.map(item => item.domain)
+  const disabledDomainList = editableDomains.value
+      .filter(item => !item.enabled)
+      .map(item => item.domain)
+  return {domainList, disabledDomainList}
 }
 
 function saveDomains() {
-  if (editableDomains.value.length === 0) {
+  const {domainList, disabledDomainList} = domainPayload()
+  if (domainList.length === 0) {
     ElMessage({
       message: t('emptyDomainListMsg'),
       type: "error",
@@ -1081,10 +1100,10 @@ function saveDomains() {
   }
 
   settingLoading.value = true
-  setDomains(editableDomains.value).then((settingData) => {
+  setDomains(domainList, disabledDomainList).then((settingData) => {
     setting.value = settingData
-    settingStore.domainList = settingData.domainList
-    resendTokenForm.domain = setting.value.domainList[0]
+    settingStore.domainList = settingData.enabledDomainList || settingData.domainList
+    resendTokenForm.domain = (setting.value.domainList || [])[0]
     domainManageShow.value = false
     ElMessage({
       message: t('saveSuccessMsg'),
@@ -1098,7 +1117,8 @@ function saveDomains() {
 }
 
 function syncDomains() {
-  if (editableDomains.value.length === 0) {
+  const {domainList, disabledDomainList} = domainPayload()
+  if (domainList.length === 0) {
     ElMessage({
       message: t('emptyDomainListMsg'),
       type: "error",
@@ -1108,10 +1128,10 @@ function syncDomains() {
   }
 
   cloudflareSyncLoading.value = true
-  syncCloudflareDomain(editableDomains.value).then((settingData) => {
+  syncCloudflareDomain(domainList, disabledDomainList).then((settingData) => {
     setting.value = settingData
-    settingStore.domainList = settingData.domainList
-    resendTokenForm.domain = setting.value.domainList[0]
+    settingStore.domainList = settingData.enabledDomainList || settingData.domainList
+    resendTokenForm.domain = (setting.value.domainList || [])[0]
     ElMessage({
       message: t('cloudflareSyncSuccessMsg'),
       type: "success",

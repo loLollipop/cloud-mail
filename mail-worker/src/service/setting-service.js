@@ -18,12 +18,12 @@ const settingService = {
 		try {
 			settingRow = await orm(c).select().from(setting).get();
 		} catch (e) {
-			if (!e.message?.includes('domain_list')) throw e;
+			if (!['domain_list', 'disabled_domain_list'].some(column => e.message?.includes(column))) throw e;
 			await this.ensureDomainColumn(c);
 			settingRow = await orm(c).select().from(setting).get();
 		}
 		settingRow.resendTokens = JSON.parse(settingRow.resendTokens);
-		settingRow.domainList = this.resolveDomainList(c, settingRow);
+		this.applyDomainState(c, settingRow);
 		c.set('setting', settingRow);
 		await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingRow));
 	},
@@ -40,12 +40,14 @@ const settingService = {
 			throw new BizError('数据库未初始化 Database not initialized.');
 		}
 
-		const domainList = this.resolveDomainList(c, setting);
+		const { domainList, disabledDomainList, enabledDomainList } = this.resolveDomainState(c, setting);
 		if (domainList.length === 0) {
 			throw new BizError(t('noDomainVariable'));
 		}
 
 		setting.domainList = domainList;
+		setting.disabledDomainList = disabledDomainList;
+		setting.enabledDomainList = enabledDomainList;
 
 
 		let linuxdoSwitch = c.env.linuxdo_switch;
@@ -139,6 +141,8 @@ const settingService = {
 		}
 
 		delete params.domainList;
+		delete params.disabledDomainList;
+		delete params.enabledDomainList;
 		delete params.hasR2;
 		delete params.hasCfEmail;
 		delete params.storageType;
@@ -148,14 +152,18 @@ const settingService = {
 		await this.refresh(c);
 	},
 
-	async setDomains(c, params) {
+	async setDomains(c, params = {}) {
 		await this.ensureDomainColumn(c);
 		const domainList = this.normalizeDomainList(params.domainList);
 		if (domainList.length === 0) {
 			throw new BizError(t('noDomainVariable'));
 		}
+		const disabledDomainList = this.normalizeDisabledDomainList(params.disabledDomainList, domainList);
 
-		await orm(c).update(setting).set({ domainList: domainList.join(',') }).run();
+		await orm(c).update(setting).set({
+			domainList: domainList.join(','),
+			disabledDomainList: disabledDomainList.join(',')
+		}).run();
 		await this.refresh(c);
 		return this.get(c);
 	},
@@ -164,7 +172,7 @@ const settingService = {
 		const settingData = await this.query(c);
 		const domain = this.normalizeDomain(params.domain);
 		const domainList = [...settingData.domainList.map(item => item.replace(/^@/, '')), domain];
-		return this.setDomains(c, { domainList });
+		return this.setDomains(c, { domainList, disabledDomainList: settingData.disabledDomainList });
 	},
 
 	async deleteDomain(c, params) {
@@ -173,10 +181,13 @@ const settingService = {
 		const domainList = settingData.domainList
 			.map(item => item.replace(/^@/, ''))
 			.filter(item => item !== domain);
-		return this.setDomains(c, { domainList });
+		const disabledDomainList = settingData.disabledDomainList
+			.map(item => item.replace(/^@/, ''))
+			.filter(item => item !== domain);
+		return this.setDomains(c, { domainList, disabledDomainList });
 	},
 
-	async syncCloudflareDomain(c, params) {
+	async syncCloudflareDomain(c, params = {}) {
 		if (!this.getCloudflareApiToken(c)) {
 			throw new BizError('CF_API_TOKEN is not configured');
 		}
@@ -185,20 +196,27 @@ const settingService = {
 			throw new BizError('CLOUDFLARE_ACCOUNT_ID is not configured');
 		}
 
+		const settingData = await this.query(c);
 		const domainList = params.domainList
 			? this.normalizeDomainList(params.domainList)
-			: this.normalizeDomainList((await this.query(c)).domainList);
+			: this.normalizeDomainList(settingData.domainList);
 		if (domainList.length === 0) {
 			throw new BizError(t('noDomainVariable'));
 		}
+		const disabledDomainList = Object.prototype.hasOwnProperty.call(params, 'disabledDomainList')
+			? this.normalizeDisabledDomainList(params.disabledDomainList, domainList)
+			: this.normalizeDisabledDomainList(settingData.disabledDomainList, domainList);
 
-		await orm(c).update(setting).set({ domainList: domainList.join(',') }).run();
+		await orm(c).update(setting).set({
+			domainList: domainList.join(','),
+			disabledDomainList: disabledDomainList.join(',')
+		}).run();
 		await this.refresh(c);
 		const syncResult = await this.syncWorkerDomainVariable(c, domainList);
-		const settingData = await this.get(c);
-		settingData.cloudflareSync = syncResult;
+		const updatedSettingData = await this.get(c);
+		updatedSettingData.cloudflareSync = syncResult;
 
-		return settingData;
+		return updatedSettingData;
 	},
 
 	async syncWorkerDomainVariable(c, domainList) {
@@ -272,6 +290,33 @@ const settingService = {
 				console.warn(`跳过域名字段：${e.message}`);
 			}
 		}
+		try {
+			await c.env.db.prepare(`ALTER TABLE setting ADD COLUMN disabled_domain_list TEXT NOT NULL DEFAULT '';`).run();
+		} catch (e) {
+			if (!e.message?.includes('duplicate column')) {
+				console.warn(`Skip disabled domain column: ${e.message}`);
+			}
+		}
+	},
+
+	applyDomainState(c, settingRow = {}) {
+		const { domainList, disabledDomainList, enabledDomainList } = this.resolveDomainState(c, settingRow);
+		settingRow.domainList = domainList;
+		settingRow.disabledDomainList = disabledDomainList;
+		settingRow.enabledDomainList = enabledDomainList;
+		return settingRow;
+	},
+
+	resolveDomainState(c, settingRow = {}) {
+		const domainList = this.resolveDomainList(c, settingRow);
+		const domainSet = new Set(domainList.map(item => item.replace(/^@/, '')));
+		const disabledDomainList = this.normalizeDomainList(settingRow.disabledDomainList, false)
+			.filter(item => domainSet.has(item))
+			.map(item => '@' + item);
+		const disabledSet = new Set(disabledDomainList);
+		const enabledDomainList = domainList.filter(item => !disabledSet.has(item));
+
+		return { domainList, disabledDomainList, enabledDomainList };
 	},
 
 	resolveDomainList(c, settingRow = {}) {
@@ -329,6 +374,12 @@ const settingService = {
 			}
 		}
 		return normalizedList;
+	},
+
+	normalizeDisabledDomainList(disabledDomainList, domainList) {
+		const domainSet = new Set(domainList);
+		return this.normalizeDomainList(disabledDomainList, false)
+			.filter(item => domainSet.has(item));
 	},
 
 	normalizeDomain(domain, throwOnInvalid = true) {
@@ -428,7 +479,7 @@ const settingService = {
 			siteKey: settingRow.siteKey,
 			background: settingRow.background,
 			loginOpacity: settingRow.loginOpacity,
-			domainList: settingRow.loginDomain === 1 && !token ? [] : settingRow.domainList,
+			domainList: settingRow.loginDomain === 1 && !token ? [] : settingRow.enabledDomainList,
 			regKey: settingRow.regKey,
 			regVerifyOpen: settingRow.regVerifyOpen,
 			addVerifyOpen: settingRow.addVerifyOpen,
