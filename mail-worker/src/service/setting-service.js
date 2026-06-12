@@ -182,12 +182,14 @@ const settingService = {
 			throw new BizError('CF_API_TOKEN is not configured');
 		}
 
-		const zoneId = await this.resolveCloudflareZoneId(c, domain);
+		const zone = await this.resolveCloudflareZone(c, domain);
+		const zoneId = zone.id;
 		const workerName = this.getCloudflareWorkerName(c, params.workerName);
 
+		const dnsBody = domain === zone.name ? undefined : JSON.stringify({ name: domain });
 		const dnsResult = await this.cloudflareRequest(c, `/zones/${zoneId}/email/routing/dns`, {
 			method: 'POST',
-			body: JSON.stringify({ name: domain })
+			...(dnsBody ? { body: dnsBody } : {})
 		});
 
 		const catchAllResult = await this.cloudflareRequest(c, `/zones/${zoneId}/email/routing/rules/catch_all`, {
@@ -217,6 +219,7 @@ const settingService = {
 		return {
 			domain,
 			zoneId,
+			zoneName: zone.name,
 			workerName,
 			dns: dnsResult.result,
 			catchAll: catchAllResult.result
@@ -224,26 +227,51 @@ const settingService = {
 	},
 
 	async resolveCloudflareZoneId(c, domain) {
+		const zone = await this.resolveCloudflareZone(c, domain);
+		return zone.id;
+	},
+
+	async resolveCloudflareZone(c, domain) {
 		const cfZoneIds = c.env.cf_zone_ids || c.env.CF_ZONE_IDS;
+		const candidateDomains = this.getZoneCandidateDomains(domain);
 		if (cfZoneIds) {
 			try {
 				const zoneIds = JSON.parse(cfZoneIds);
-				if (zoneIds[domain]) {
-					return zoneIds[domain];
+				for (const candidateDomain of candidateDomains) {
+					if (zoneIds[candidateDomain]) {
+						return {
+							id: zoneIds[candidateDomain],
+							name: candidateDomain
+						};
+					}
 				}
 			} catch (e) {
 				throw new BizError('CF_ZONE_IDS must be a JSON object');
 			}
 		}
 
-		const data = await this.cloudflareRequest(c, `/zones?name=${encodeURIComponent(domain)}&status=active`, {
-			method: 'GET'
-		});
-		const zone = data?.result?.[0];
-		if (!zone?.id) {
-			throw new BizError(`Cloudflare zone not found: ${domain}`);
+		for (const candidateDomain of candidateDomains) {
+			const data = await this.cloudflareRequest(c, `/zones?name=${encodeURIComponent(candidateDomain)}&status=active`, {
+				method: 'GET'
+			});
+			const zone = data?.result?.[0];
+			if (zone?.id) {
+				return {
+					id: zone.id,
+					name: zone.name || candidateDomain
+				};
+			}
 		}
-		return zone.id;
+		throw new BizError(`Cloudflare zone not found: ${domain}`);
+	},
+
+	getZoneCandidateDomains(domain) {
+		const parts = domain.split('.');
+		const candidates = [];
+		for (let index = 0; index <= parts.length - 2; index++) {
+			candidates.push(parts.slice(index).join('.'));
+		}
+		return candidates;
 	},
 
 	async cloudflareRequest(c, path, init = {}) {
