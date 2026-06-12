@@ -502,7 +502,6 @@
             <div
                 v-for="domain in editableDomains"
                 :key="domain"
-                class="domain-row"
             >
               <el-tag
                   closable
@@ -511,21 +510,13 @@
               >
                 @{{ domain }}
               </el-tag>
-              <el-button
-                  size="small"
-                  type="primary"
-                  plain
-                  :loading="cloudflareSyncLoading === domain"
-                  @click="syncDomain(domain)"
-              >
-                {{ $t('syncCloudflare') }}
-              </el-button>
             </div>
           </div>
         </div>
         <template #footer>
           <div class="dialog-footer">
             <el-button @click="domainManageShow = false">{{ $t('cancel') }}</el-button>
+            <el-button :loading="cloudflareSyncLoading" type="primary" plain @click="syncDomains">{{ $t('syncCloudflare') }}</el-button>
             <el-button :loading="settingLoading" type="primary" @click="saveDomains">{{ $t('save') }}</el-button>
           </div>
         </template>
@@ -920,7 +911,7 @@ const clearS3Loading = ref(false)
 const r2DomainInput = ref('')
 const domainInput = ref('')
 const editableDomains = ref([])
-const cloudflareSyncLoading = ref('')
+const cloudflareSyncLoading = ref(false)
 const loginOpacity = ref(0)
 const minEmailPrefix = ref(0)
 const emailPrefixFilter = ref([])
@@ -1106,17 +1097,28 @@ function saveDomains() {
   })
 }
 
-function syncDomain(domain) {
-  cloudflareSyncLoading.value = domain
-  syncCloudflareDomain(domain).then(() => {
+function syncDomains() {
+  if (editableDomains.value.length === 0) {
+    ElMessage({
+      message: t('emptyDomainListMsg'),
+      type: "error",
+      plain: true
+    })
+    return
+  }
+
+  cloudflareSyncLoading.value = true
+  syncCloudflareDomain(editableDomains.value).then((settingData) => {
+    setting.value = settingData
+    settingStore.domainList = settingData.domainList
+    resendTokenForm.domain = setting.value.domainList[0]
     ElMessage({
       message: t('cloudflareSyncSuccessMsg'),
       type: "success",
       plain: true
     })
-    getSettings()
   }).finally(() => {
-    cloudflareSyncLoading.value = ''
+    cloudflareSyncLoading.value = false
   })
 }
 

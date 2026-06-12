@@ -36,6 +36,6 @@ export function deleteDomain(domain) {
     return http.delete(`/setting/domains/${encodeURIComponent(domain)}`)
 }
 
-export function syncCloudflareDomain(domain) {
-    return http.post('/setting/domains/sync-cloudflare', { domain })
+export function syncCloudflareDomain(domainList) {
+    return http.post('/setting/domains/sync-cloudflare', { domainList })
 }

@@ -177,109 +177,70 @@ const settingService = {
 	},
 
 	async syncCloudflareDomain(c, params) {
-		const domain = this.normalizeDomain(params.domain);
 		if (!this.getCloudflareApiToken(c)) {
 			throw new BizError('CF_API_TOKEN is not configured');
 		}
 
-		const zone = await this.resolveCloudflareZone(c, domain);
-		const zoneId = zone.id;
-		const workerName = this.getCloudflareWorkerName(c, params.workerName);
-
-		const dnsBody = domain === zone.name ? undefined : JSON.stringify({ name: domain });
-		const dnsResult = await this.cloudflareRequest(c, `/zones/${zoneId}/email/routing/dns`, {
-			method: 'POST',
-			...(dnsBody ? { body: dnsBody } : {})
-		});
-
-		const catchAllResult = await this.cloudflareRequest(c, `/zones/${zoneId}/email/routing/rules/catch_all`, {
-			method: 'PUT',
-			body: JSON.stringify({
-				actions: [
-					{
-						type: 'worker',
-						value: [workerName]
-					}
-				],
-				matchers: [
-					{
-						type: 'all'
-					}
-				],
-				enabled: true,
-				name: `Cloud Mail catch-all to ${workerName}`
-			})
-		});
-
-		const settingData = await this.query(c);
-		if (!settingData.domainList.includes('@' + domain)) {
-			await this.setDomains(c, { domainList: [...settingData.domainList, domain] });
+		if (!this.getCloudflareAccountId(c)) {
+			throw new BizError('CLOUDFLARE_ACCOUNT_ID is not configured');
 		}
 
+		const domainList = params.domainList
+			? this.normalizeDomainList(params.domainList)
+			: this.normalizeDomainList((await this.query(c)).domainList);
+		if (domainList.length === 0) {
+			throw new BizError(t('noDomainVariable'));
+		}
+
+		await orm(c).update(setting).set({ domainList: domainList.join(',') }).run();
+		await this.refresh(c);
+		const syncResult = await this.syncWorkerDomainVariable(c, domainList);
+		const settingData = await this.get(c);
+		settingData.cloudflareSync = syncResult;
+
+		return settingData;
+	},
+
+	async syncWorkerDomainVariable(c, domainList) {
+		const accountId = this.getCloudflareAccountId(c);
+		const workerName = this.getCloudflareWorkerName(c);
+		const settingsPath = `/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}/settings`;
+		const settingsData = await this.cloudflareRequest(c, settingsPath, { method: 'GET' });
+		const bindings = settingsData?.result?.bindings || [];
+		const inheritBindings = bindings
+			.filter(item => item.name !== 'domain')
+			.map(item => ({ type: item.type, name: item.name }));
+
+		const formData = new FormData();
+		formData.set('settings', JSON.stringify({
+			bindings: [
+				...inheritBindings,
+				{
+					type: 'plain_text',
+					name: 'domain',
+					text: JSON.stringify(domainList)
+				}
+			]
+		}));
+
+		await this.cloudflareRequest(c, settingsPath, {
+			method: 'PATCH',
+			body: formData
+		});
+
 		return {
-			domain,
-			zoneId,
-			zoneName: zone.name,
 			workerName,
-			dns: dnsResult.result,
-			catchAll: catchAllResult.result
+			variableName: 'domain'
 		};
 	},
 
-	async resolveCloudflareZoneId(c, domain) {
-		const zone = await this.resolveCloudflareZone(c, domain);
-		return zone.id;
-	},
-
-	async resolveCloudflareZone(c, domain) {
-		const cfZoneIds = c.env.cf_zone_ids || c.env.CF_ZONE_IDS;
-		const candidateDomains = this.getZoneCandidateDomains(domain);
-		if (cfZoneIds) {
-			try {
-				const zoneIds = JSON.parse(cfZoneIds);
-				for (const candidateDomain of candidateDomains) {
-					if (zoneIds[candidateDomain]) {
-						return {
-							id: zoneIds[candidateDomain],
-							name: candidateDomain
-						};
-					}
-				}
-			} catch (e) {
-				throw new BizError('CF_ZONE_IDS must be a JSON object');
-			}
-		}
-
-		for (const candidateDomain of candidateDomains) {
-			const data = await this.cloudflareRequest(c, `/zones?name=${encodeURIComponent(candidateDomain)}&status=active`, {
-				method: 'GET'
-			});
-			const zone = data?.result?.[0];
-			if (zone?.id) {
-				return {
-					id: zone.id,
-					name: zone.name || candidateDomain
-				};
-			}
-		}
-		throw new BizError(`Cloudflare zone not found: ${domain}`);
-	},
-
-	getZoneCandidateDomains(domain) {
-		const parts = domain.split('.');
-		const candidates = [];
-		for (let index = 0; index <= parts.length - 2; index++) {
-			candidates.push(parts.slice(index).join('.'));
-		}
-		return candidates;
-	},
-
 	async cloudflareRequest(c, path, init = {}) {
+		const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
 		const resp = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
 			...init,
 			headers: {
 				Authorization: `Bearer ${this.getCloudflareApiToken(c)}`,
-				'Content-Type': 'application/json',
+				...(isFormData ? {} : { 'Content-Type': 'application/json' }),
 				...(init.headers || {})
 			}
 		});
@@ -292,7 +253,11 @@ const settingService = {
 	},
 
 	getCloudflareApiToken(c) {
-		return c.env.cf_api_token || c.env.CF_API_TOKEN;
+		return c.env.cf_api_token || c.env.CF_API_TOKEN || c.env.CLOUDFLARE_API_TOKEN;
+	},
+
+	getCloudflareAccountId(c) {
+		return c.env.cloudflare_account_id || c.env.CLOUDFLARE_ACCOUNT_ID;
 	},
 
 	getCloudflareWorkerName(c, workerName) {
