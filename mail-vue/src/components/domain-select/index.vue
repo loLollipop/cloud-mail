@@ -1,11 +1,16 @@
 <template>
-  <el-dropdown trigger="click" class="domain-select-dropdown" @command="selectDomain">
+  <el-dropdown
+      trigger="click"
+      class="domain-select-dropdown"
+      popper-class="domain-select-popper"
+      @command="selectDomain"
+  >
     <div class="domain-select-trigger">
       <span class="domain-select-text">{{ modelValue || placeholder }}</span>
       <Icon class="domain-select-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
     </div>
     <template #dropdown>
-      <el-dropdown-menu>
+      <el-dropdown-menu class="domain-select-menu">
         <el-dropdown-item
             v-for="item in domainList"
             :key="item"
@@ -68,5 +73,12 @@ function selectDomain(value) {
 .domain-select-icon {
   flex: none;
   margin-left: 4px;
+}
+
+:global(.domain-select-popper .domain-select-menu) {
+  max-height: min(320px, calc(100vh - 48px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 </style>
